@@ -1,0 +1,3 @@
+[submodule "yar"]
+	path = yar
+	url = https://github.com/segcore/yar.git

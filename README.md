@@ -63,3 +63,32 @@ or from ctest
 
 Total Test time (real) =   0.00 sec
 ```
+
+### yar
+
+Convenient, typesafe, single-implementation, zero-copy dynamic arrays in C without crazy macros.
+
+```c
+define YAR_IMPLEMENTATION
+#include "yar.h"
+
+struct Numbers {
+    double *items;
+    size_t count;
+    size_t capacity;
+};
+
+int main() {
+    struct Numbers numbers = {0};
+    // Or: yar(double) numbers = {0};
+    *yar_append(&numbers) = 3.14159;
+    *yar_append(&numbers) = 2.71828;
+    *yar_append(&numbers) = 1.61803;
+
+    for(size_t i = 0; i < numbers.count; i++) {
+        printf("%f\n", numbers.items[i]);
+    }
+
+    yar_free(&numbers);
+}
+```
