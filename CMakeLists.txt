@@ -3,8 +3,12 @@ cmake_minimum_required(VERSION 3.0...5.99)
 
 project(modules_c)
 
-include(CTest)
+option(BUILD_EXAMPLES "Build example programs?" ON)
+if(BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
 
+include(CTest)
 if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()

@@ -17,3 +17,5 @@ test(testing_h_positive ./testing_h_positive.c)
 test(testing_h_negative ./testing_h_negative.c)
 test(testing_h_exit ./testing_h_exit.c)
 set_property(TEST testing_h_exit PROPERTY WILL_FAIL true)
+
+test(test_network ./test_network.c  ../network.c)

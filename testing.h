@@ -39,10 +39,12 @@ int tests_end(void);                           // End the test. Usually return t
 void tests_reset(void);                        // Reset pass/fail counts
 void test_section_name(const char* name);      // Labels the test output
 
-#define TEST(expr)      _test_assertion(__FILE__, __FUNCTION__, __LINE__, (expr), "%s", #expr)
-#define TEST_PASS(...)  _test_assertion(__FILE__, __FUNCTION__, __LINE__, true , __VA_ARGS__)
-#define TEST_FAIL(...)  _test_assertion(__FILE__, __FUNCTION__, __LINE__, false, __VA_ARGS__)
-#define REQUIRE(expr)   (_test_assertion(__FILE__, __FUNCTION__, __LINE__, (expr), "%s", #expr) || (exit(tests_end()), 0))
+#define TEST(expr)           _test_assertion(__FILE__, __FUNCTION__, __LINE__, (expr), "%s", #expr)
+#define TEST_MSG(expr, msg)  _test_assertion(__FILE__, __FUNCTION__, __LINE__, (expr), "%s : %s", #expr, msg)
+#define TEST_MSGF(expr, ...) _test_assertion(__FILE__, __FUNCTION__, __LINE__, (expr), __VA_ARGS__)
+#define TEST_PASS(...)       _test_assertion(__FILE__, __FUNCTION__, __LINE__, true , __VA_ARGS__)
+#define TEST_FAIL(...)       _test_assertion(__FILE__, __FUNCTION__, __LINE__, false, __VA_ARGS__)
+#define REQUIRE(expr)        (_test_assertion(__FILE__, __FUNCTION__, __LINE__, (expr), "%s", #expr) || (exit(tests_end()), 0))
 
 // Numeric comparisons
 #define TEST_CLOSE(a, b, eps)  _test_close(__FILE__, __FUNCTION__, __LINE__, (a), (b), (eps), #a " ~= " #b)
@@ -76,8 +78,13 @@ extern size_t tests_failed;
 extern bool tests_print_success;
 extern const char* tests_current;
 
+// Macro shenanigans for better warnings
+#if defined(__unix__) || defined(__GNUC__) || defined(__clang__)
+    #define PRINTF_FORMAT(fmt, ellipsis)  __attribute__((format(printf, fmt, ellipsis)))
+#endif
+
 // Internal function declarations
-bool _test_assertion(const char* file, const char* function, int line, bool expr, const char* format, ...);
+bool _test_assertion(const char* file, const char* function, int line, bool expr, const char* format, ...) PRINTF_FORMAT(5, 6);
 bool _test_array_eq(const char* file, const char* function, int line, const void* a1, const void* a2, size_t elem_size, size_t len1, size_t len2, const char* expression);
 
 bool _test_eq(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression);
