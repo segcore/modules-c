@@ -92,3 +92,26 @@ int main() {
     yar_free(&numbers);
 }
 ```
+
+### network.h
+
+Simple cross-platform networking abstraction. Currently supports TCP clients and servers only.
+See examples for [client](./examples/network_client.c) and [server](./examples/network_server.c).
+
+```c
+void net_init(NetHandle* net);
+enum NetErrorCode net_connect(NetHandle* net, const char* remote_name, uint16_t remote_port, int timeout_ms);
+
+void net_init_listener(NetListener* listener);
+enum NetErrorCode net_listen(NetListener* listener, const char* local_addr, uint16_t local_port);
+enum NetErrorCode net_accept(NetListener* listener, NetHandle* out_accepted, int timeout_ms);
+
+enum NetErrorCode net_send(NetHandle* net, const void* data, size_t size, size_t* bytes_sent);
+enum NetErrorCode net_receive(NetHandle* net, void* data, size_t buffer_size, size_t* bytes_received, int timeout_ms);
+enum NetErrorCode net_receive_all(NetHandle* net, void* data, size_t buffer_size, size_t* bytes_received, int timeout_ms);
+
+bool net_wait(Socket sock, int wait_type, int timeout_ms);
+void net_close_socket(Socket sock);
+void net_close_handle(NetHandle* net);
+void net_close_listener(NetListener* listener);
+```
