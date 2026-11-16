@@ -12,7 +12,7 @@ int main() {
     net_init(&client);
     while (true) {
         int timeout = 500; // -1 for infinite, 0 for no wait, >0 for milliseconds
-        printf("Waiting for connect to %s:%hu...\n", server_ip, remote_port);
+        printf("Connecting to %s:%hu...\n", server_ip, remote_port);
         ec = net_connect(&client, server_ip, remote_port, timeout);
         if (ec == NETERROR_NONE) {
             // Connected!
@@ -28,6 +28,7 @@ int main() {
 
     // now connected, so send/receive data
     const char* data_to_send = "client says hello!";
+    printf("> Sending: %s\n", data_to_send);
     ec = net_send(&client, data_to_send, strlen(data_to_send), NULL);
     if (ec != NETERROR_NONE) {
         fprintf(stderr, "Failed to sent data: %s\n", net_strerror(ec));
@@ -44,15 +45,43 @@ int main() {
     size_t rx_count = 0;
     ec = net_receive(&client, buf, sizeof(buf), &rx_count, timeout);
     if (ec == NETERROR_NONE) {
-        printf("Received: %.*s\n", (int)rx_count, buf);
-    }
-    // Receive until buffer is full
-    ec = net_receive_all(&client, buf, sizeof(buf), &rx_count, timeout);
-    if (ec == NETERROR_NONE) {
-        printf("Received: %.*s\n", (int)rx_count, buf);
+        printf("< Received: %.*s\n", (int)rx_count, buf);
+    } else {
+        printf("* First receive failed: %s\n", net_strerror(ec));
     }
 
-    // When done, close it
+    // Or: receive until buffer is full
+    ec = net_receive_all(&client, buf, sizeof(buf), &rx_count, timeout);
+    if (ec == NETERROR_NONE) {
+        printf("< Received: %.*s\n", (int)rx_count, buf);
+    } else {
+        printf("* Second receive failed: %s\n", net_strerror(ec));
+    }
+
+    // We're done reading. We can "do the right thing" and half-close the read end.
+    // It helps TCP to shutdown "correctly" (without losing data which may be in transit)
+    net_shutdown(&client, NET_SHUTDOWN_READ);
+
+    ec = net_send(&client, "Last hurrah!!!!", strlen("Last hurrah!!!!"), NULL);
+    if (ec == NETERROR_NONE) {
+        printf("> Sent final goodbyes\n");
+    } else {
+        printf("* Failed to send final goodbye: %s\n", net_strerror(ec));
+    }
+
+    // Finished writing too.
+    net_shutdown(&client, NET_SHUTDOWN_WRITE);
+
+    // We can wait for the server to TCP-acknowledge all of our data
+    // and close the connection before we cut it from our side
+    if (net_wait(client.socket, WAIT_ERROR, 100)) {
+        printf("* Orderly shutdown complete.\n");
+    } else {
+        printf("* Shutdown wait timeout.\n");
+    }
+
+    // Done, close it.
+    printf("* Closing socket\n");
     net_close_handle(&client);
     return 0;
 }

@@ -62,9 +62,17 @@
 
 // Flag combinations used when waiting for data
 #ifndef WAIT_READ
+    #define WAIT_ERROR 0x0  //!< Wait for socket error condition
     #define WAIT_READ  0x1  //!< Wait for reading to become available
     #define WAIT_WRITE 0x2  //!< Wait for writing to become available
     #define WAIT_ANY   (WAIT_READ | WAIT_WRITE) // !< Wait for reading or writing to become available
+#endif
+
+// Flag combinations to shutdown data sockets
+#ifndef NET_SHUTDOWN_READ
+    #define NET_SHUTDOWN_READ   0x1 //!< Shutdown reading on the socket
+    #define NET_SHUTDOWN_WRITE  0x2 //!< Shutdown writing on the socket
+    #define NET_SHUTDOWN_ALL    0x3 //!< Shutdown reading and writing on the socket
 #endif
 
 #ifdef _WIN32
@@ -109,6 +117,7 @@ enum NetErrorCode {
     NETERROR_SEND_PARTIAL,                //!< Partial data sent
     NETERROR_END_OF_DATA,                 //!< End of data
     NETERROR_NETWORK_RECEIVE,             //!< Network receive error
+    NETERROR_NETWORK_RECEIVE_PARTIAL,     //!< Network receive all attempted but partial data received
     NETERROR_WOULD_BLOCK,                 //!< Action would block; returning early
     NETERROR_BUFFER_FULL,                 //!< Buffer is full
     NETERROR_BUFFER_TOO_SMALL,            //!< Buffer is too small to fit the payload
@@ -118,13 +127,17 @@ enum NetErrorCode {
 // Forward declaration
 struct addrinfo;
 
+// Structure for `data sockets`: capable of sending and receiving data
 typedef struct {
     Socket socket;
     enum ConnectionState state;
+    int shutdown;   //!< Current shutdown status bitmask. See NET_SHUTDOWN_READ family.
+    // internal
     struct addrinfo* base_addr_list;
     struct addrinfo* addr_list;
 } NetHandle;
 
+// Structure for listening (TCP server) sockets. Cannot send or receive data.
 typedef struct {
     Socket listener;
 } NetListener;
@@ -143,11 +156,19 @@ enum NetErrorCode net_send(NetHandle* net, const void* data, size_t size, size_t
 enum NetErrorCode net_receive(NetHandle* net, void* data, size_t buffer_size, size_t* bytes_received, int timeout_ms);
 enum NetErrorCode net_receive_all(NetHandle* net, void* data, size_t buffer_size, size_t* bytes_received, int timeout_ms);
 
-// Wait for an event.
-// wait_type: Bitwise flags on what to wait for, see WAIT_READ and WAIT_WRITE.
-// timeout_ms: <0 wait forever, 0 no wait, >0 wait max that many milliseconds.
-// returns: true if given action is ready, or an error on the socket. false otherwise.
+/// Wait for an event.
+/// wait_type: Bitwise flags on what to wait for, see WAIT_READ and WAIT_WRITE.
+/// timeout_ms: <0 wait forever, 0 no wait, >0 wait max that many milliseconds.
+/// returns: true if given action is ready, or an error on the socket. false otherwise.
 bool net_wait(Socket sock, int wait_type, int timeout_ms);
+
+/// Shutdown the data socket for reading and/or writing more data.
+/// Used as the first half of a graceful TCP shutdown.
+///
+/// shutdown_type: bitmask of NET_SHUTDOWN_READ, NET_SHUTDOWN_WRITE
+/// returns: true on success, false on a failure (e.g. invalid socket).
+bool net_shutdown(NetHandle* net, int shutdown_type);
+
 void net_close_socket(Socket sock);
 void net_close_handle(NetHandle* net);
 void net_close_listener(NetListener* listener);

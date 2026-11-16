@@ -48,7 +48,7 @@ int main(int argc, char* argv[])
 
     unsigned char x[1];
     TEST_MSG(net_wait(server.socket, WAIT_ANY, 20), "Server wait should detect closure quickly");
-    printf("Subsequent read should say END_OF_DATA\n");
+    TEST_LOG("Subsequent read should say END_OF_DATA\n");
     TEST_EQ(ec = net_receive(&server, x, sizeof(x), NULL, 0), NETERROR_END_OF_DATA);
 
     net_close_handle(&server);

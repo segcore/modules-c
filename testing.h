@@ -40,6 +40,7 @@ void tests_reset(void);                        // Reset pass/fail counts
 void test_section_name(const char* name);      // Labels the test output
 
 #define TEST(expr)           _test_assertion(__FILE__, __FUNCTION__, __LINE__, (expr), "%s", #expr)
+#define TEST_LOG(...)        fprintf(stderr, __VA_ARGS__)
 #define TEST_MSG(expr, msg)  _test_assertion(__FILE__, __FUNCTION__, __LINE__, (expr), "%s : %s", #expr, msg)
 #define TEST_MSGF(expr, ...) _test_assertion(__FILE__, __FUNCTION__, __LINE__, (expr), __VA_ARGS__)
 #define TEST_PASS(...)       _test_assertion(__FILE__, __FUNCTION__, __LINE__, true , __VA_ARGS__)

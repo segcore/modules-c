@@ -18,4 +18,7 @@ test(testing_h_negative ./testing_h_negative.c)
 test(testing_h_exit ./testing_h_exit.c)
 set_property(TEST testing_h_exit PROPERTY WILL_FAIL true)
 
-test(test_network ./test_network.c  ../network.c)
+test(test_network          ./test_network.c)
+test(test_network_shutdown ./test_network_shutdown.c)
+target_link_libraries(test_network          PRIVATE network)
+target_link_libraries(test_network_shutdown PRIVATE network)

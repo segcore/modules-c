@@ -20,6 +20,10 @@
     #define FLAGS_RECV  0
     #define MYPOLL_READ   POLLIN
 
+    #define SHUT_RD    SD_RECEIVE
+    #define SHUT_WR    SD_SEND
+    #define SHUT_RDWR  SD_BOTH
+
     static void init_globals()
     {
         static bool initialised = false;
@@ -54,6 +58,10 @@
     #define FLAGS_SEND  0
     #define FLAGS_RECV  0
     #define MYPOLL_READ   POLLIN
+
+    #define SHUT_RD    SD_RECEIVE
+    #define SHUT_WR    SD_SEND
+    #define SHUT_RDWR  SD_BOTH
 
     static void init_globals()
     {
@@ -524,7 +532,10 @@ enum NetErrorCode net_receive_all(NetHandle* net, void* data, size_t buffer_size
             enum NetErrorCode ec_once = net_receive(net, data + rx_total, buffer_size - rx_total, &rx_once, next_timeout);
             if (ec_once == NETERROR_NONE) {
                 rx_total += rx_once;
-            } else break;
+            } else {
+                ec = ec_once;
+                break;
+            }
         }
 
         if (rx_total == buffer_size) {
@@ -532,6 +543,11 @@ enum NetErrorCode net_receive_all(NetHandle* net, void* data, size_t buffer_size
             break;
         } else if (ec != NETERROR_NONE) {
             // Failed. Stop now.
+            // But must indicate partial data has been received, if it was.
+            // The next call to receive will give the more detailed error
+            if (rx_total > 0) {
+                ec = NETERROR_NETWORK_RECEIVE_PARTIAL;
+            }
             break;
         } else {
             if (timeout_ms > 0) {
@@ -567,6 +583,22 @@ bool net_wait(Socket sock, int wait_type, int timeout_ms)
     fds[0].events = events;
     int ret = poll(fds, 1, timeout_ms);
     return ret != 0;
+}
+
+
+bool net_shutdown(NetHandle* net, int shutdown_type)
+{
+    int ret = -1;
+    net->shutdown |= shutdown_type; // Stores what is shutdown
+    if ((shutdown_type & NET_SHUTDOWN_ALL) == NET_SHUTDOWN_ALL) {
+        ret = shutdown(net->socket, SHUT_RDWR);
+    } else if(shutdown_type & NET_SHUTDOWN_READ) {
+        ret = shutdown(net->socket, SHUT_RD);
+    } else if(shutdown_type & NET_SHUTDOWN_WRITE) {
+        ret = shutdown(net->socket, SHUT_WR);
+    }
+    bool ok = ret == 0;
+    return ok;
 }
 
 
@@ -621,6 +653,7 @@ const char* net_strerror(enum NetErrorCode net_error)
         case NETERROR_SEND_PARTIAL:                return "Partial data sent";
         case NETERROR_END_OF_DATA:                 return "End of data";
         case NETERROR_NETWORK_RECEIVE:             return "Network receive error";
+        case NETERROR_NETWORK_RECEIVE_PARTIAL:     return "Network receive all attempted but partial data received";
         case NETERROR_WOULD_BLOCK:                 return "Action would block; returning early";
         case NETERROR_BUFFER_FULL:                 return "Buffer is full";
         case NETERROR_BUFFER_TOO_SMALL:            return "Buffer is too small to fit the payload";

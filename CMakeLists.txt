@@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 3.0...5.99)
 
 project(modules_c)
 
+add_library(network STATIC network.c)
+
 option(BUILD_EXAMPLES "Build example programs?" ON)
 if(BUILD_EXAMPLES)
     add_subdirectory(examples)
