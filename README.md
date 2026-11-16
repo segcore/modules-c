@@ -111,6 +111,7 @@ enum NetErrorCode net_receive(NetHandle* net, void* data, size_t buffer_size, si
 enum NetErrorCode net_receive_all(NetHandle* net, void* data, size_t buffer_size, size_t* bytes_received, int timeout_ms);
 
 bool net_wait(Socket sock, int wait_type, int timeout_ms);
+bool net_shutdown(NetHandle* net, int shutdown_type);
 void net_close_socket(Socket sock);
 void net_close_handle(NetHandle* net);
 void net_close_listener(NetListener* listener);
