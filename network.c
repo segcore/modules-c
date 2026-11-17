@@ -1,16 +1,22 @@
 #include "network.h"
 
 #include <assert.h>
-#include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 
-#if defined(__MINGW32__)
+#if defined(_WIN32)
 
-    #include <sys/types.h>
-    #include <unistd.h>
-    #include <ws2tcpip.h>
+    #if defined(__MINGW32__)
+        #include <sys/types.h>
+        #include <unistd.h>
+        #include <ws2tcpip.h>
+    #else
+        #include <ws2tcpip.h>
+        #pragma comment(lib, "ws2_32.lib")
+
+        typedef int ssize_t;    //!< Not really correct, but recv() returns int on Windows
+    #endif
 
     #define close   closesocket
     #define poll    WSAPoll
@@ -24,69 +30,22 @@
     #define SHUT_WR    SD_SEND
     #define SHUT_RDWR  SD_BOTH
 
-    static void init_globals()
-    {
-        static bool initialised = false;
-        if (!initialised)
-        {
-            initialised = true;
-            WSADATA idontcare;
-            int ret = WSAStartup(0x202, &idontcare);
-            if (ret != 0)
-            {
-                fprintf(stderr, "FATAL: WSAStartup failed: %d  %d\n", ret, WSAGetLastError());
-                abort();
-            }
-        }
-    }
-
     static void socket_setup(Socket sock)
     {
         setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&(DWORD){0}, sizeof(DWORD));
         setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (char*)&(DWORD){0}, sizeof(DWORD));
+        ioctlsocket(sock, FIONBIO, &(u_long){1});
     }
 
-#elif defined(_WIN32)
-    #include <ws2tcpip.h>
-    #pragma comment(lib, "ws2_32.lib")
-
-    #define close   closesocket
-    #define poll    WSAPoll
-    typedef int ssize_t;    //!< Not really correct, but recv() returns int on Windows
-
-    #define FLAGS_SOCK  0
-    #define FLAGS_SEND  0
-    #define FLAGS_RECV  0
-    #define MYPOLL_READ   POLLIN
-
-    #define SHUT_RD    SD_RECEIVE
-    #define SHUT_WR    SD_SEND
-    #define SHUT_RDWR  SD_BOTH
-
-    static void init_globals()
+    #include <sysinfoapi.h> // GetTickCount64()
+    static double monotonic_time(void)
     {
-        static bool initialised = false;
-        if (!initialised)
-        {
-            initialised = true;
-            WSADATA idontcare;
-            int ret = WSAStartup(0x202, &idontcare);
-            if (ret != 0)
-            {
-                fprintf(stderr, "FATAL: WSAStartup failed: %d  %d\n", ret, WSAGetLastError());
-                abort();
-            }
-        }
+        // This isn't very precise (e.g. 15ms increments)
+        return GetTickCount64() / 1000.0;
     }
-
-    static void socket_setup(Socket sock)
-    {
-        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&(DWORD){0}, sizeof(DWORD));
-        setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (char*)&(DWORD){0}, sizeof(DWORD));
-    }
-
 #else
 
+    #include <errno.h>
     #include <sys/types.h>
     #include <sys/socket.h>
     #include <unistd.h>
@@ -98,43 +57,9 @@
     #define FLAGS_RECV  MSG_DONTWAIT
     #define MYPOLL_READ   POLLIN | POLLPRI
 
-    #define init_globals()  // nothing
     static inline void socket_setup(Socket sock) { (void)sock; } // nothing, with type checking
 
-#endif
-
-// This part might be refactored out
-#if defined(_WIN32)
-
-    #include <sysinfoapi.h> // GetSystemTimeAsFileTime, GetTickCount64()
-
-    // static double time_since_unix_epoch(void)
-    // {
-    //     int64_t wintime;
-    //     GetSystemTimeAsFileTime((FILETIME*)&wintime);
-    //     wintime      -=116444736000000000LL;  // 1jan1601 to 1jan1970
-    //     double t = (long double)wintime / 10000000.0L;      // seconds
-    //     return t;
-    // }
-
-    static double monotonic_time(void)
-    {
-        // This isn't very precise (e.g. 15ms increments)
-        return GetTickCount64() / 1000.0;
-    }
-
-#else
-    // Unix-like OS
     #include <time.h>
-
-    // static double time_since_unix_epoch(void)
-    // {
-    //     struct timespec spec = {0};
-    //     clock_gettime(CLOCK_REALTIME, &spec);
-    //     double t = spec.tv_sec + spec.tv_nsec / 1e9;
-    //     return t;
-    // }
-
     static double monotonic_time(void)
     {
         struct timespec spec = {0};
@@ -142,12 +67,48 @@
         double t = spec.tv_sec + spec.tv_nsec / 1e9;
         return t;
     }
+
 #endif
 
 
+// Intentionally not static, in case someone outside wants to know what we've done
+int net_globals_state = 0;
+
+void net_globals_startup(bool do_initialisation)
+{
+    (void)do_initialisation; // silence unused warning
+#ifdef _WIN32
+    if (net_globals_state == 0) {
+        net_globals_state |= 1;
+        if (do_initialisation) {
+            net_globals_state |= 2;
+            WSADATA idontcare;
+            int ret = WSAStartup(0x202, &idontcare);
+            if (ret != 0)
+            {
+                fprintf(stderr, "ERROR: WSAStartup failed with error code %d\n", ret);
+            }
+        }
+    }
+#endif
+}
+
+void net_globals_shutdown()
+{
+#ifdef _WIN32
+    if (net_globals_state & 2) {
+        int ret = WSACleanup();
+        if (ret != 0) {
+            fprintf(stderr, "WSACleanup() failed with error code %d\n", WSAGetLastError());
+        }
+    }
+    net_globals_state = 0;
+#endif
+}
+
 void net_init(NetHandle* net)
 {
-    init_globals();
+    net_globals_startup(true);
     memset(net, 0, sizeof *net);
     net->socket = INVALID_SOCKET;
 }
@@ -155,7 +116,7 @@ void net_init(NetHandle* net)
 
 void net_init_listener(NetListener* listener)
 {
-    init_globals();
+    net_globals_startup(true);
     memset(listener, 0, sizeof *listener);
     listener->listener = INVALID_SOCKET;
 }
@@ -227,8 +188,20 @@ static enum NetErrorCode net_connect_once_internal(NetHandle* net, const char* r
                 break;
             }
 
-            switch(errno)
-            {
+#if defined _WIN32
+            switch(WSAGetLastError()) {
+                case WSAEISCONN: connected = true; break;
+                case WSAEWOULDBLOCK: use_socket = true; break;
+                case WSAEADDRINUSE: ec = NETERROR_SOCKET_BIND; break;
+                case WSAEALREADY: /* connect already active */ ec = NETERROR_CONNECTING; break;
+                case WSAECONNREFUSED: ec = NETERROR_CONNECTION_REFUSED; break;
+                case WSAETIMEDOUT: ec = NETERROR_CONNECT_TIMEOUT; break;
+                default:
+                    ec = NETERROR_CONNECT_FAILED;
+                    break;
+            }
+#else
+            switch(errno) {
                 case EISCONN:
                     // Already connected
                     connected = true;
@@ -238,19 +211,14 @@ static enum NetErrorCode net_connect_once_internal(NetHandle* net, const char* r
                     // Non-blocking and has not yet completed
                     use_socket = true;
                     break;
-                case ECONNREFUSED:
-                    ec = NETERROR_CONNECTION_REFUSED;
-                    break;
-                case ENETUNREACH:
-                    ec = NETERROR_NETWORK_UNREACHABLE;
-                    break;
-                case ETIMEDOUT:
-                    ec = NETERROR_CONNECT_TIMEOUT;
-                    break;
+                case ECONNREFUSED: ec = NETERROR_CONNECTION_REFUSED; break;
+                case ENETUNREACH: ec = NETERROR_NETWORK_UNREACHABLE; break;
+                case ETIMEDOUT: ec = NETERROR_CONNECT_TIMEOUT; break;
                 default:
                     ec = NETERROR_CONNECT_FAILED;
                     break;
             }
+#endif
 
             if (connected || use_socket)
             {
@@ -352,7 +320,6 @@ enum NetErrorCode net_listen(NetListener* listener, const char* local_addr, uint
             }
             socket_setup(sock);
 
-            errno = 0;
             if (use_socket && setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void*)&(int){1}, sizeof(int)) < 0)
             {
                 use_socket = false;
@@ -365,7 +332,7 @@ enum NetErrorCode net_listen(NetListener* listener, const char* local_addr, uint
                 ec = NETERROR_SOCKET_BIND;
             }
 
-            if (use_socket && listen(sock, 3) == -1)
+            if (use_socket && listen(sock, 32) == -1)
             {
                 use_socket = false;
                 ec = NETERROR_SOCKET_LISTEN;
@@ -405,6 +372,13 @@ enum NetErrorCode net_accept(NetListener* listener, NetHandle* out_accepted, int
             out_accepted->state = CONSTATE_CONNECTED;
             ec = NETERROR_NONE;
         } else {
+#ifdef _WIN32
+            switch(WSAGetLastError()) {
+                case WSAECONNRESET: ec = NETERROR_ACCEPT_WAITING; break; // An incoming connection was indicated, but was subsequently terminated by the remote peer prior to accepting the call.
+                case WSAEWOULDBLOCK: ec = NETERROR_ACCEPT_WAITING; break;
+                default: ec = NETERROR_ACCEPT_FAILED; break;
+            }
+#else
             switch(errno) {
                 case EAGAIN:
 #if EAGAIN != EWOULDBLOCK
@@ -416,6 +390,7 @@ enum NetErrorCode net_accept(NetListener* listener, NetHandle* out_accepted, int
                     ec = NETERROR_ACCEPT_FAILED;
                     break;
             }
+#endif
         }
     }
 
@@ -431,25 +406,31 @@ enum NetErrorCode net_send(NetHandle* net, const void* data, size_t size, size_t
     ssize_t ret;
 retry:
     ret = send(net->socket, data, size, FLAGS_SEND);
-    if (ret > 0)
-    {
+    if (ret > 0) {
         size_t uret = (size_t)ret;
-        if (bytes_sent != NULL)
-        {
+        if (bytes_sent != NULL) {
             *bytes_sent = uret;
         }
 
         // Sending partial message is probably worth quitting over
         // If not, the higher layer can decide for itself
-        if (uret != size)
-        {
+        if (uret != size) {
             ec = NETERROR_SEND_PARTIAL;
         }
-    }
-    else
-    {
-        switch(errno)
-        {
+    } else {
+#if _WIN32
+        switch(WSAGetLastError()) {
+            case WSAEWOULDBLOCK:
+                // Unable to send, for now...
+                *bytes_sent = 0;
+                break;
+            case WSAENOTCONN: ec = NETERROR_NETWORK_SEND_NOT_CONNECTED; break;
+            case WSAESHUTDOWN: ec = NETERROR_NETWORK_SEND_NOT_CONNECTED; break;
+            case WSAECONNRESET: ec = NETERROR_NETWORK_RESET; break;
+            default: ec = NETERROR_NETWORK_SEND_FAIL; break;
+        }
+#else
+        switch(errno) {
             case EAGAIN:
 #if EAGAIN != EWOULDBLOCK
             case EWOULDBLOCK:
@@ -457,20 +438,13 @@ retry:
                 // Unable to send, for now...
                 *bytes_sent = 0;
                 break;
-            case ECONNRESET:
-                ec = NETERROR_NETWORK_RESET;
-                break;
-            case EINTR:
-                // We wanna try again. Who says gotos are bad?
+            case ECONNRESET: ec = NETERROR_NETWORK_RESET; break;
+            case EINTR: // We wanna try again. Who says gotos are bad?
                 goto retry;
-                break;
-            case EPIPE:
-                ec = NETERROR_NETWORK_SEND_NOT_CONNECTED;
-                break;
-            default:
-                ec = NETERROR_NETWORK_SEND_FAIL;
-                break;
+            case EPIPE: ec = NETERROR_NETWORK_SEND_NOT_CONNECTED; break;
+            default: ec = NETERROR_NETWORK_SEND_FAIL; break;
         }
+#endif
     }
 
     return ec;
@@ -483,7 +457,7 @@ enum NetErrorCode net_receive(NetHandle* net, void* data, size_t buffer_size, si
     size_t received_count = 0;
 
     enum NetErrorCode ec = NETERROR_WOULD_BLOCK;
-    if (net_wait(net->socket, WAIT_READ, timeout_ms)) {
+    if (timeout_ms == 0 || net_wait(net->socket, WAIT_READ, timeout_ms)) {
         ssize_t ret;
 retry:
         ret = recv(net->socket, data, buffer_size, FLAGS_RECV);
@@ -497,19 +471,25 @@ retry:
                 ec = NETERROR_END_OF_DATA;
             }
         } else {
+#if defined _WIN32
+            switch(WSAGetLastError()) {
+                case WSAENOTCONN: ec = NETERROR_NOT_CONNECTED; break;
+                case WSAESHUTDOWN: ec = NETERROR_END_OF_DATA; break;
+                case WSAEWOULDBLOCK: break;
+                case WSAECONNRESET: ec = NETERROR_NETWORK_RESET; break;
+                default: ec = NETERROR_NETWORK_RECEIVE; break;
+            }
+#else
             switch(errno) {
                 case EAGAIN:
 #if EAGAIN != EWOULDBLOCK
                 case EWOULDBLOCK:
 #endif
                     break;
-                case EINTR:
-                    goto retry;
-                    break;
-                default:
-                    ec = NETERROR_NETWORK_RECEIVE;
-                    break;
+                case EINTR: goto retry;
+                default: ec = NETERROR_NETWORK_RECEIVE; break;
             }
+#endif
         }
     }
 

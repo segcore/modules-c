@@ -79,8 +79,14 @@ extern size_t tests_failed;
 extern bool tests_print_success;
 extern const char* tests_current;
 
-// Macro shenanigans for better warnings
-#if defined(__unix__) || defined(__GNUC__) || defined(__clang__)
+// Macro shenanigans for better warnings and platform rubbish
+#if defined _WIN32
+    #define ARG_LONGDOUBLE(val) ((double)val)
+    #define FMT_LONGDOUBLE "%Lf"
+    #define PRINTF_FORMAT(fmt, ellipsis)  /* nothing */
+#else
+    #define ARG_LONGDOUBLE(val) (val)
+    #define FMT_LONGDOUBLE "%Lf"
     #define PRINTF_FORMAT(fmt, ellipsis)  __attribute__((format(printf, fmt, ellipsis)))
 #endif
 
@@ -100,6 +106,7 @@ bool _test_lei(const char* file, const char* function, int line, long long a, lo
 bool _test_gti(const char* file, const char* function, int line, long long a, long long b, const char* raw_expression);
 bool _test_gei(const char* file, const char* function, int line, long long a, long long b, const char* raw_expression);
 
+#endif // TESTING_H
 
 /// ----- Implementation -----
 #if TESTING_IMPLEMENTATION
@@ -119,31 +126,31 @@ void test_section_name(const char* name) {
 
 bool _test_close(const char* file, const char* function, int line, long double a, long double b, long double epsilon, const char* raw_expression) {
     bool expr = ABSOF(a - b) <= epsilon;
-    return _test_assertion(file, function, line, expr, "%s  [%Lf %s %Lf]", raw_expression, a, expr ? "~=" : "!~=", b);
+    return _test_assertion(file, function, line, expr, "%s  [" FMT_LONGDOUBLE " %s " FMT_LONGDOUBLE "]", raw_expression, ARG_LONGDOUBLE(a), expr ? "~=" : "!~=", ARG_LONGDOUBLE(b));
 }
 bool _test_eq(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression) {
     bool expr = a == b;
-    return _test_assertion(file, function, line, expr, "%s  [%Lf %s %Lf]", raw_expression, a, expr ? "==" : "!=", b);
+    return _test_assertion(file, function, line, expr, "%s  [" FMT_LONGDOUBLE " %s " FMT_LONGDOUBLE "]", raw_expression, ARG_LONGDOUBLE(a), expr ? "==" : "!=", ARG_LONGDOUBLE(b));
 }
 bool _test_ne(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression) {
     bool expr = a != b;
-    return _test_assertion(file, function, line, expr, "%s  [%Lf %s %Lf]", raw_expression, a, expr ? "!=" : "==", b);
+    return _test_assertion(file, function, line, expr, "%s  [" FMT_LONGDOUBLE " %s " FMT_LONGDOUBLE "]", raw_expression, ARG_LONGDOUBLE(a), expr ? "!=" : "==", ARG_LONGDOUBLE(b));
 }
 bool _test_lt(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression) {
     bool expr = a < b;
-    return _test_assertion(file, function, line, expr, "%s  [%Lf %s %Lf]", raw_expression, a, expr ? "<" : "!<", b);
+    return _test_assertion(file, function, line, expr, "%s  [" FMT_LONGDOUBLE " %s " FMT_LONGDOUBLE "]", raw_expression, ARG_LONGDOUBLE(a), expr ? "<" : "!<", ARG_LONGDOUBLE(b));
 }
 bool _test_le(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression) {
     bool expr = a <= b;
-    return _test_assertion(file, function, line, expr, "%s  [%Lf %s %Lf]", raw_expression, a, expr ? "<=" : "!<=", b);
+    return _test_assertion(file, function, line, expr, "%s  [" FMT_LONGDOUBLE " %s " FMT_LONGDOUBLE "]", raw_expression, ARG_LONGDOUBLE(a), expr ? "<=" : "!<=", ARG_LONGDOUBLE(b));
 }
 bool _test_gt(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression) {
     bool expr = a > b;
-    return _test_assertion(file, function, line, expr, "%s  [%Lf %s %Lf]", raw_expression, a, expr ? ">" : "!>", b);
+    return _test_assertion(file, function, line, expr, "%s  [" FMT_LONGDOUBLE " %s " FMT_LONGDOUBLE "]", raw_expression, ARG_LONGDOUBLE(a), expr ? ">" : "!>", ARG_LONGDOUBLE(b));
 }
 bool _test_ge(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression) {
     bool expr = a >= b;
-    return _test_assertion(file, function, line, expr, "%s  [%Lf %s %Lf]", raw_expression, a, expr ? ">=" : "!>=", b);
+    return _test_assertion(file, function, line, expr, "%s  [" FMT_LONGDOUBLE " %s " FMT_LONGDOUBLE "]", raw_expression, ARG_LONGDOUBLE(a), expr ? ">=" : "!>=", ARG_LONGDOUBLE(b));
 }
 
 bool _test_eqi(const char* file, const char* function, int line, long long a, long long b, const char* raw_expression) {
@@ -237,9 +244,8 @@ void tests_arg_parse(int* argc, char*** argv) {
     }
 }
 void tests_arg_parse_const(int* argc, const char*** argv) { tests_arg_parse(argc, (char***) argv); }
-#endif // TESTING_IMPLEMENTATION
 
-#endif // TESTING_H
+#endif // TESTING_IMPLEMENTATION
 /*
 ------------------------------------------------------------------------------
 This software is available under 2 licenses -- choose whichever you prefer.

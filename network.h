@@ -127,7 +127,8 @@ enum NetErrorCode {
 // Forward declaration
 struct addrinfo;
 
-// Structure for `data sockets`: capable of sending and receiving data
+// Structure for `data sockets`: capable of sending and receiving data.
+// Used for client sockets and sockets accepted from a TCP server.
 typedef struct {
     Socket socket;
     enum ConnectionState state;
@@ -143,17 +144,56 @@ typedef struct {
 } NetListener;
 
 
+/// Error code to human-descriptive string
 const char* net_strerror(enum NetErrorCode net_error);
 
+// Unfortunately, Windows sockets need you to call a global WSAStartup() function before using sockets.
+// If you already do this in your application, send `false` here. This turns off automatic initialisation.
+// If you call none of these, the automatic initialisation will initialise winsock in the first call to net_init
+// or net_init_listener.
+//
+// The shutdown will unload winsock DLL (once its WSAStartup() counter reaches 0).
+void net_globals_startup(bool do_initialisation);
+void net_globals_shutdown();
+
+
+//----- TCP client -----
+/// Initialise a data socket (with INVALID_SOCKET)
 void net_init(NetHandle* net);
+
+/// Connect to a remote host as a TCP client.
+/// remote_name: can be an IP address (v4 or v6) or any name to lookup. Name resolution is performed internally.
+/// timeout: < 0 means forever, 0 means no wait, >0 is the time to wait for the connect in milliseconds.
+///          If connect does not succeed within the timeout (including 0), the socket is still pending and a
+///          future call to net_connect() will tell you if it has completed (successfully or otherwise).
+/// returns: NETERROR_NONE on success, NETERROR_CONNECTING while pending, and failure code otherwise.
 enum NetErrorCode net_connect(NetHandle* net, const char* remote_name, uint16_t remote_port, int timeout_ms);
 
+//----- TCP server -----
+/// Initialise a listening socket for TCP servers (with INVALID_SOCKET)
 void net_init_listener(NetListener* listener);
+
+/// Begin listening for incoming connections as a TCP server.
+/// local_addr: Bind IP address, or NULL to bind to the wildcard (all addresses)
 enum NetErrorCode net_listen(NetListener* listener, const char* local_addr, uint16_t local_port);
+
+/// Attempt to accept new incoming connection to this TCP server.
+/// out_accepted: The new data socket handle, an out-parameter filled only if the return code is NETERROR_NONE.
+/// timeout_ms: <0 forever, 0 no wait, >0 milliseconds time to wait.
+/// returns: NETERROR_NONE if successful, NETERROR_ACCEPT_WAITING if still waiting, or other code on failure.
 enum NetErrorCode net_accept(NetListener* listener, NetHandle* out_accepted, int timeout_ms);
 
+//----- Any data socket -----
+/// Send data to the remote side.
 enum NetErrorCode net_send(NetHandle* net, const void* data, size_t size, size_t* bytes_sent);
+
+/// Receive some data into the given buffer
+/// returns: NETERROR_NONE on success, or a reason code on failure.
 enum NetErrorCode net_receive(NetHandle* net, void* data, size_t buffer_size, size_t* bytes_received, int timeout_ms);
+/// Receive data until the buffer is full, or failure.
+/// returns: NETERROR_NONE on success,
+///          NETERROR_NETWORK_RECEIVE_PARTIAL on partial completion (e.g. some data then socket is closed),
+///          or a reason code on failure.
 enum NetErrorCode net_receive_all(NetHandle* net, void* data, size_t buffer_size, size_t* bytes_received, int timeout_ms);
 
 /// Wait for an event.
@@ -169,8 +209,13 @@ bool net_wait(Socket sock, int wait_type, int timeout_ms);
 /// returns: true on success, false on a failure (e.g. invalid socket).
 bool net_shutdown(NetHandle* net, int shutdown_type);
 
+/// Close a raw socket (prefer net_close_handle() or net_close_listener())
 void net_close_socket(Socket sock);
+
+/// Close a data socket, and set net->socket to INVALID_SOCKET.
 void net_close_handle(NetHandle* net);
+
+/// Close a listener socket, and set listener->listener to INVALID_SOCKET.
 void net_close_listener(NetListener* listener);
 
 #endif
