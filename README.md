@@ -7,10 +7,40 @@ Find any useful module, and copy it into your project to use it.
 
 ## Build and test all the things here
 
+Build and test directly:
+
+```sh
+gcc ./tests/testing_h_positive.c -I. -o testing_h_positive
+./testing_h_positive
+
+gcc examples/network_server.c network.c -I. -o network_server
+./network_server
+
+gcc examples/network_client.c network.c -I. -o network_client
+./network_client
+```
+
+Build and test all of the things with CMake:
+
 ```sh
 cmake . -B build
 cmake --build build
 ctest --test-dir build
+```
+
+Code coverage report (available when using gcc or clang):
+
+```sh
+ctest --test-dir build -T Test -T Coverage
+
+# If using gcovr
+gcovr --root . --html-details build/gcov-html/ &&
+xdg-open build/gcov-html/coverage_details.html
+
+# If using lcov
+lcov --directory build --capture --output-file build/lcov-coverage.info &&
+genhtml build/lcov-coverage.info --output-directory build/lcov-html/ &&
+xdg-open build/lcov-html/index.html
 ```
 
 ## Modules
@@ -18,6 +48,7 @@ ctest --test-dir build
 ### testing.h
 
 Library for creating tests. Gives some more helpful output than basic asserts, etc.
+See [./testing.h](testing.h) for more supported functions.
 
 Sample code:
 
@@ -27,8 +58,13 @@ Sample code:
 int main(int argc, char** argv) {
     tests_arg_parse(&argc, &argv);
 
-    TEST_EQ(1, 1);
-    TEST_NE(1, 2);
+    TEST_EQ(1, 1); // Test Equal
+    TEST_NE(1, 2); // Test Not-Equal
+    TEST_LE(4, 7); // Test less-than-or-equal
+    // ...
+
+    double added = 0.1 + 0.2;
+    TEST_CLOSE(added, 0.3, 1e-6);
 
     return tests_end();
 }
@@ -39,18 +75,32 @@ Example output from `./tests/testing_h_positive.c`:
 ```
 $ ./tests/testing_h_positive
 ...
-+pass  /.../tests/testing_h_positive.c:72 main(): medium >= medium  [33 >= 33]
-+pass  /.../tests/testing_h_positive.c:75 main(): 1 == 1  [1.000000 == 1.000000]
-+pass  /.../tests/testing_h_positive.c:76 main(): 1.5 == 1.5  [1.500000 == 1.500000]
-+pass  /.../tests/testing_h_positive.c:77 main(): 12345678 == 12345678  [12345678.000000 == 12345678.000000]
-+pass  /.../tests/testing_h_positive.c:78 main(): 1.0 ~= 1.000000004  [1.000000 ~= 1.000000]
-+pass  /.../tests/testing_h_positive.c:80 main(): added ~= 0.3  [0.300000 ~= 0.300000]
-+pass  /.../tests/testing_h_positive.c:78 main(): length1 != sizeof(length1)  [1234 != 8]
++pass  /.../tests/testing_h_positive.c:65 main(): medium >= medium  [33 >= 33]
++pass  /.../tests/testing_h_positive.c:68 main(): 1 == 1  [1 == 1]
++pass  /.../tests/testing_h_positive.c:69 main(): 1.5 == 1.5  [1.500000 == 1.500000]
++pass  /.../tests/testing_h_positive.c:70 main(): 12345678 == 12345678  [12345678 == 12345678]
++pass  /.../tests/testing_h_positive.c:71 main(): 1.0 ~= 1.000000004  [1.000000 ~= 1.000000]
++pass  /.../tests/testing_h_positive.c:73 main(): added ~= 0.3  [0.300000 ~= 0.300000]
++pass  /.../tests/testing_h_positive.c:77 main(): length1 != sizeof(length1)  [1234 != 8]
 =================================
 Passed   50 /  50   100%
+
+$ ./tests/testing_h_negative
+...
+-FAIL  /.../tests/testing_h_negative.c:39 main(): 6 > 6  [6.000000 !> 6.000000]
+-FAIL  /.../tests/testing_h_negative.c:40 main(): 123 >= 150  [123.000000 !>= 150.000000]
+...
 ```
 
-or from ctest
+or from ctest (CMake's testing automation). Build an run with:
+```sh
+cmake . -B build
+cmake --build build
+ctest --test-dir build
+```
+
+CTest output:
+
 ```
     Start 1: testing_h_positive
 1/3 Test #1: testing_h_positive ...............   Passed    0.00 sec
@@ -63,6 +113,27 @@ or from ctest
 
 Total Test time (real) =   0.00 sec
 ```
+
+#### CTest
+
+If using CMake as the build system, adding CTest as a test runner takes very
+little effort. Much of the functionality which is built-in to GoogleTest and
+Boost.Test is also available in CTest. This means that the testing framework
+can be simpler and just focus on testing (which makes it compile faster too).
+
+Some CTest features include:
+
+* Run all tests in one command
+* Run a subset of tests
+* Run tests in parallel
+* Randomize test order
+* Test timeouts
+* Quiet and verbose modes
+* Output JUnit formatted test results
+* Repeat tests
+* Test cost logging (how long each test takes to run, over many runs)
+* Re-run only failed tests
+* Submit results to a graphical dashboard
 
 ### yar
 
@@ -99,6 +170,8 @@ Simple cross-platform networking abstraction. Currently supports TCP clients and
 See examples for [client](./examples/network_client.c) and [server](./examples/network_server.c).
 
 ```c
+const char* net_strerror(enum NetErrorCode net_error);
+
 void net_init(NetHandle* net);
 enum NetErrorCode net_connect(NetHandle* net, const char* remote_name, uint16_t remote_port, int timeout_ms);
 

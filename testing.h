@@ -32,6 +32,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>  // for exit() in REQUIRE expansion
 
 void tests_arg_parse(int* argc, char*** argv); // Default parsing of command line arguments. Optional.
 void tests_arg_parse_const(int* argc, const char*** argv);
@@ -47,22 +48,22 @@ void test_section_name(const char* name);      // Labels the test output
 #define TEST_FAIL(...)       _test_assertion(__FILE__, __FUNCTION__, __LINE__, false, __VA_ARGS__)
 #define REQUIRE(expr)        (_test_assertion(__FILE__, __FUNCTION__, __LINE__, (expr), "%s", #expr) || (exit(tests_end()), 0))
 
+// Integer comparisons
+#define TEST_EQ(a, b)  _test_eqi(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " == " #b)
+#define TEST_NE(a, b)  _test_nei(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " != " #b)
+#define TEST_LT(a, b)  _test_lti(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " < " #b)
+#define TEST_LE(a, b)  _test_lei(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " <= " #b)
+#define TEST_GT(a, b)  _test_gti(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " > " #b)
+#define TEST_GE(a, b)  _test_gei(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " >= " #b)
+
 // Numeric comparisons
 #define TEST_CLOSE(a, b, eps)  _test_close(__FILE__, __FUNCTION__, __LINE__, (a), (b), (eps), #a " ~= " #b)
-#define TEST_EQ(a, b)  _test_eq(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " == " #b)
-#define TEST_NE(a, b)  _test_ne(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " != " #b)
-#define TEST_LT(a, b)  _test_lt(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " < " #b)
-#define TEST_LE(a, b)  _test_le(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " <= " #b)
-#define TEST_GT(a, b)  _test_gt(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " > " #b)
-#define TEST_GE(a, b)  _test_ge(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " >= " #b)
-
-// Integer comparisons
-#define TEST_EQI(a, b)  _test_eqi(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " == " #b)
-#define TEST_NEI(a, b)  _test_nei(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " != " #b)
-#define TEST_LTI(a, b)  _test_lti(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " < " #b)
-#define TEST_LEI(a, b)  _test_lei(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " <= " #b)
-#define TEST_GTI(a, b)  _test_gti(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " > " #b)
-#define TEST_GEI(a, b)  _test_gei(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " >= " #b)
+#define TEST_EQF(a, b)  _test_eqf(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " == " #b)
+#define TEST_NEF(a, b)  _test_nef(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " != " #b)
+#define TEST_LTF(a, b)  _test_ltf(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " < " #b)
+#define TEST_LEF(a, b)  _test_lef(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " <= " #b)
+#define TEST_GTF(a, b)  _test_gtf(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " > " #b)
+#define TEST_GEF(a, b)  _test_gef(__FILE__, __FUNCTION__, __LINE__, (a), (b), #a " >= " #b)
 
 // Other comparisons
 #define TEST_ARRAY_EQ(a1, a2, n1, n2)   _test_array_eq(__FILE__, __FUNCTION__, __LINE__, (a1), (a2), (sizeof((a1)[0])), (n1), (n2), #a1 " === " #a2)
@@ -79,10 +80,10 @@ extern size_t tests_failed;
 extern bool tests_print_success;
 extern const char* tests_current;
 
-// Macro shenanigans for better warnings and platform rubbish
+// Macro shenanigans for better warnings and platform support
 #if defined _WIN32
     #define ARG_LONGDOUBLE(val) ((double)val)
-    #define FMT_LONGDOUBLE "%Lf"
+    #define FMT_LONGDOUBLE "%f"
     #define PRINTF_FORMAT(fmt, ellipsis)  /* nothing */
 #else
     #define ARG_LONGDOUBLE(val) (val)
@@ -94,12 +95,14 @@ extern const char* tests_current;
 bool _test_assertion(const char* file, const char* function, int line, bool expr, const char* format, ...) PRINTF_FORMAT(5, 6);
 bool _test_array_eq(const char* file, const char* function, int line, const void* a1, const void* a2, size_t elem_size, size_t len1, size_t len2, const char* expression);
 
-bool _test_eq(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression);
-bool _test_lt(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression);
-bool _test_le(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression);
-bool _test_gt(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression);
-bool _test_ge(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression);
+// Makes use of automatic up-conversion in C, so you don't need overrides for float vs double vs long double
+bool _test_eqf(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression);
+bool _test_ltf(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression);
+bool _test_lef(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression);
+bool _test_gtf(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression);
+bool _test_gef(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression);
 
+// Makes use of automatic up-conversion in C, so you don't need overrides for i8, u8, i16, u16, i32, ...
 bool _test_eqi(const char* file, const char* function, int line, long long a, long long b, const char* raw_expression);
 bool _test_lti(const char* file, const char* function, int line, long long a, long long b, const char* raw_expression);
 bool _test_lei(const char* file, const char* function, int line, long long a, long long b, const char* raw_expression);
@@ -115,6 +118,10 @@ bool _test_gei(const char* file, const char* function, int line, long long a, lo
     #undef TESTING_IMPLEMENTATION
     #define TESTING_IMPLEMENTATION 0
 
+    #if !defined MAX_ARRAY_BYTES
+        #define MAX_ARRAY_BYTES 80u
+    #endif
+
 #include <stdarg.h>
 size_t tests_passed = 0;
 size_t tests_failed = 0;
@@ -128,27 +135,27 @@ bool _test_close(const char* file, const char* function, int line, long double a
     bool expr = ABSOF(a - b) <= epsilon;
     return _test_assertion(file, function, line, expr, "%s  [" FMT_LONGDOUBLE " %s " FMT_LONGDOUBLE "]", raw_expression, ARG_LONGDOUBLE(a), expr ? "~=" : "!~=", ARG_LONGDOUBLE(b));
 }
-bool _test_eq(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression) {
+bool _test_eqf(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression) {
     bool expr = a == b;
     return _test_assertion(file, function, line, expr, "%s  [" FMT_LONGDOUBLE " %s " FMT_LONGDOUBLE "]", raw_expression, ARG_LONGDOUBLE(a), expr ? "==" : "!=", ARG_LONGDOUBLE(b));
 }
-bool _test_ne(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression) {
+bool _test_nef(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression) {
     bool expr = a != b;
     return _test_assertion(file, function, line, expr, "%s  [" FMT_LONGDOUBLE " %s " FMT_LONGDOUBLE "]", raw_expression, ARG_LONGDOUBLE(a), expr ? "!=" : "==", ARG_LONGDOUBLE(b));
 }
-bool _test_lt(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression) {
+bool _test_ltf(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression) {
     bool expr = a < b;
     return _test_assertion(file, function, line, expr, "%s  [" FMT_LONGDOUBLE " %s " FMT_LONGDOUBLE "]", raw_expression, ARG_LONGDOUBLE(a), expr ? "<" : "!<", ARG_LONGDOUBLE(b));
 }
-bool _test_le(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression) {
+bool _test_lef(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression) {
     bool expr = a <= b;
     return _test_assertion(file, function, line, expr, "%s  [" FMT_LONGDOUBLE " %s " FMT_LONGDOUBLE "]", raw_expression, ARG_LONGDOUBLE(a), expr ? "<=" : "!<=", ARG_LONGDOUBLE(b));
 }
-bool _test_gt(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression) {
+bool _test_gtf(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression) {
     bool expr = a > b;
     return _test_assertion(file, function, line, expr, "%s  [" FMT_LONGDOUBLE " %s " FMT_LONGDOUBLE "]", raw_expression, ARG_LONGDOUBLE(a), expr ? ">" : "!>", ARG_LONGDOUBLE(b));
 }
-bool _test_ge(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression) {
+bool _test_gef(const char* file, const char* function, int line, long double a, long double b, const char* raw_expression) {
     bool expr = a >= b;
     return _test_assertion(file, function, line, expr, "%s  [" FMT_LONGDOUBLE " %s " FMT_LONGDOUBLE "]", raw_expression, ARG_LONGDOUBLE(a), expr ? ">=" : "!>=", ARG_LONGDOUBLE(b));
 }
@@ -211,10 +218,22 @@ bool _test_assertion(const char* file, const char* function, int line, bool expr
 bool _test_array_eq(const char* file, const char* function, int line, const void* a1, const void* a2, size_t elem_size, size_t len1, size_t len2, const char* expression) {
     bool match = len1 == len2 && memcmp(a1, a2, elem_size * len1) == 0;
     if(!_test_assertion(file, function, line, match, "%s", expression)) {
+        size_t count1 = len1 * elem_size;
+        size_t count2 = len2 * elem_size;
+        size_t i = 0;
         fprintf(stderr, "  a1 [%zu]: ", len1);
-        for(size_t i = 0; i < MINOF(len1, 99u); i++) fprintf(stderr, " %02x", ((const unsigned char*)a1)[i]);
+        // Maybe this should instead start printing at the first mismatch
+        for(i = 0; i < MINOF(count1, MAX_ARRAY_BYTES); i++) {
+            fprintf(stderr, " %02x", ((const unsigned char*)a1)[i]);
+            if (elem_size > 1 && (i+1) % elem_size == 0) fprintf(stderr, " |");
+        }
+        if (i == MAX_ARRAY_BYTES) fprintf(stderr, "...");
         fprintf(stderr, "\n  a2 [%zu]: ", len2);
-        for(size_t i = 0; i < MINOF(len2, 99u); i++) fprintf(stderr, " %02x", ((const unsigned char*)a2)[i]);
+        for(i = 0; i < MINOF(count2, MAX_ARRAY_BYTES); i++) {
+            fprintf(stderr, " %02x", ((const unsigned char*)a2)[i]);
+            if (elem_size > 1 && (i+1) % elem_size == 0) fprintf(stderr, " |");
+        }
+        if (i == MAX_ARRAY_BYTES) fprintf(stderr, "...");
         fprintf(stderr, "\n");
     }
     return match;
