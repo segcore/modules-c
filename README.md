@@ -48,7 +48,7 @@ xdg-open build/lcov-html/index.html
 ### testing.h
 
 Library for creating tests. Gives some more helpful output than basic asserts, etc.
-See [./testing.h](testing.h) for more supported functions.
+See [testing.h](testing.h) for more supported functions.
 
 Sample code:
 
@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
 
 Example output from `./tests/testing_h_positive.c`:
 
-```
+```console
 $ ./tests/testing_h_positive
 ...
 +pass  /.../tests/testing_h_positive.c:65 main(): medium >= medium  [33 >= 33]
